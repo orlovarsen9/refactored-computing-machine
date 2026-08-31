@@ -19,7 +19,34 @@ const CHUNK_SIZE = 40000;
 const SESSION_HOURS = 168; // 7 дней
 
 function doGet() {
-  return jsonOut({ok:true, service:"Project CRM", time:new Date().toISOString()});
+  try {
+    const state = loadState();
+    mirrorSheets(state);
+    return jsonOut({
+      ok:true,
+      service:"Project CRM",
+      initialized:true,
+      users:(state.users || []).length,
+      clients:(state.clients || []).length,
+      message:"CRM initialized. Sheets created/updated.",
+      time:new Date().toISOString()
+    });
+  } catch (err) {
+    return jsonOut({
+      ok:false,
+      error:String(err && err.message || err),
+      hint:"Откройте Apps Script именно через Расширения → Apps Script в нужной Google Таблице."
+    });
+  }
+}
+
+// Можно запустить вручную из редактора Apps Script один раз.
+// Функция сразу создаст CRM_DATA, Пользователи, Проекты, Блоки и Комментарии.
+function setupCRM() {
+  const state = loadState();
+  mirrorSheets(state);
+  SpreadsheetApp.flush();
+  return "CRM готова. Пользователей: " + (state.users || []).length;
 }
 
 function doPost(e) {
@@ -204,8 +231,16 @@ function saveSession(token, userId) {
   PropertiesService.getScriptProperties().setProperty("sess_" + token, JSON.stringify({userId:userId,exp:exp}));
 }
 
-function getDataSheet() {
+function getSpreadsheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) {
+    throw new Error("Скрипт не привязан к Google Таблице. Откройте нужную таблицу → Расширения → Apps Script и вставьте код туда.");
+  }
+  return ss;
+}
+
+function getDataSheet() {
+  const ss = getSpreadsheet();
   let sh = ss.getSheetByName(DATA_SHEET);
   if (!sh) sh = ss.insertSheet(DATA_SHEET);
   return sh;
@@ -250,7 +285,7 @@ function saveState(state) {
 }
 
 function mirrorSheets(state) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
 
   let projects = ss.getSheetByName(PROJECTS_SHEET);
   if (!projects) projects = ss.insertSheet(PROJECTS_SHEET);
