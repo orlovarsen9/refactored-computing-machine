@@ -179,11 +179,14 @@
       <section class="content-shell">
         <header class="mobile-top">
           <div class="side-brand"><img class="brand-sticker" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj4KPHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIHJ4PSIyNCIgZmlsbD0iIzI1MzI0NiIvPgo8Y2lyY2xlIGN4PSI1MCIgY3k9IjM3IiByPSIxNyIgZmlsbD0iI2Y1OWUwYiIvPgo8cGF0aCBkPSJNMjAgODVjNC0yMCAxNi0zMCAzMC0zMHMyNiAxMCAzMCAzMCIgZmlsbD0iI2Y1OWUwYiIvPgo8L3N2Zz4=" alt=""><span>Проект</span></div>
-          <div style="display:flex;gap:8px">
-            <button id="mobileTheme" class="btn ghost">${theme==="dark"?"☀":"☾"}</button>
-            <button id="mobileLogout" class="btn ghost">Выйти</button>
+          <div class="mobile-top-actions">
+            <button id="mobileTheme" class="btn ghost mobile-icon-btn" aria-label="Тема">${theme==="dark"?"☀":"☾"}</button>
+            <button id="mobileLogout" class="btn ghost mobile-logout-btn">Выйти</button>
           </div>
         </header>
+        <nav class="mobile-admin-nav">
+          ${menu.map(([id,ico,title])=>`<button class="mobile-admin-link" data-nav="${id}"><span class="mobile-admin-ico">${ico}</span><span>${title}</span></button>`).join("")}
+        </nav>
         <main class="main">${content}<footer class="footer">© 2026 Проект. Все права защищены.</footer></main>
       </section>
     </div>`;
