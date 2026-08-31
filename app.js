@@ -128,7 +128,7 @@
       err.textContent="Проверка...";
       try{
         const data=await api("login",{login,password});
-        session={token:data.token,userId:data.user.id};
+        session={token:data.token,userId:(data.user&&data.user.id)||(data.state.users.find(u=>u.login===login)?.id)||"u_admin"};
         localStorage.setItem(sessionKey,JSON.stringify(session));
         db=data.state;
         localStorage.setItem(CACHE_KEY,JSON.stringify(db));
