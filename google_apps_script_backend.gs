@@ -14,6 +14,7 @@ const DATA_SHEET = "CRM_DATA";
 const PROJECTS_SHEET = "Проекты";
 const BLOCKS_SHEET = "Блоки";
 const COMMENTS_SHEET = "Комментарии";
+const USERS_SHEET = "Пользователи";
 const CHUNK_SIZE = 40000;
 const SESSION_HOURS = 168; // 7 дней
 
@@ -82,6 +83,10 @@ function handleLogin(body) {
   const state = loadState();
   const login = String(body.login || "").trim().toLowerCase();
   const password = String(body.password || "");
+  if (!state || !Array.isArray(state.users)) {
+    return jsonOut({ok:false,error:"Лист CRM_DATA повреждён или база пользователей не создана"});
+  }
+
   const user = (state.users || []).find(function(u){
     return String(u.login || "").trim().toLowerCase() === login && u.active !== false;
   });
@@ -253,10 +258,13 @@ function mirrorSheets(state) {
   if (!blocks) blocks = ss.insertSheet(BLOCKS_SHEET);
   let comments = ss.getSheetByName(COMMENTS_SHEET);
   if (!comments) comments = ss.insertSheet(COMMENTS_SHEET);
+  let usersSheet = ss.getSheetByName(USERS_SHEET);
+  if (!usersSheet) usersSheet = ss.insertSheet(USERS_SHEET);
 
   projects.clearContents();
   blocks.clearContents();
   comments.clearContents();
+  usersSheet.clearContents();
 
   const pRows = [[
     "№","Имя","Ник","Пол","Профессия","Менеджер","Дата начала",
@@ -264,6 +272,18 @@ function mirrorSheets(state) {
   ]];
   const bRows = [["№ проекта","Имя","Блок","Реакция"]];
   const cRows = [["№ проекта","Имя","Блок","Автор","Дата","Комментарий"]];
+  const uRows = [["ID","Имя","Логин","Роль","Доступ","Ник"]];
+
+  (state.users || []).forEach(function(u){
+    uRows.push([
+      u.id || "",
+      u.name || "",
+      u.login || "",
+      u.role || "",
+      u.active !== false ? "Разрешён" : "Запрещён",
+      u.nick || ""
+    ]);
+  });
 
   const users = {};
   (state.users || []).forEach(function(u){ users[u.id] = u; });
@@ -302,9 +322,11 @@ function mirrorSheets(state) {
   projects.getRange(1,1,pRows.length,pRows[0].length).setValues(pRows);
   blocks.getRange(1,1,bRows.length,bRows[0].length).setValues(bRows);
   comments.getRange(1,1,cRows.length,cRows[0].length).setValues(cRows);
+  usersSheet.getRange(1,1,uRows.length,uRows[0].length).setValues(uRows);
   projects.setFrozenRows(1);
   blocks.setFrozenRows(1);
   comments.setFrozenRows(1);
+  usersSheet.setFrozenRows(1);
 }
 
 function sanitizeState(state) {

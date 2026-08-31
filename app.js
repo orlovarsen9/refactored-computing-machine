@@ -1,8 +1,8 @@
 
 (() => {
-  const API_URL = "https://script.google.com/macros/s/AKfycbyitEcLyl1VA4ZadbxoSfGMUIQAWxVwVf6wG7kn_A8xzdMiVRF9_mN24geYzgQTAJHzuA/exec";
-  const CACHE_KEY = "project_crm_shared_cache_v22";
-  const sessionKey = "project_crm_shared_session_v22";
+  const API_URL = "https://script.google.com/macros/s/AKfycbwI_BVEc-8W7GBzHZX-aazq0hp9t6W8bPVLk0Bae425GNq1pP-L15LknoBOuarVI-rE7w/exec";
+  const CACHE_KEY = "project_crm_shared_cache_v24";
+  const sessionKey = "project_crm_shared_session_v24";
 
   const seed = {
     users: [
@@ -128,9 +128,23 @@
       err.textContent="Проверка...";
       try{
         const data=await api("login",{login,password});
-        session={token:data.token,userId:(data.user&&data.user.id)||(data.state.users.find(u=>u.login===login)?.id)||"u_admin"};
+        if(!data || !data.token) throw new Error(data?.error||"Сервер не вернул токен входа");
+        if(data.state && Array.isArray(data.state.users)){
+          db=data.state;
+        }else{
+          const stateData=await api("getState",{token:data.token});
+          if(!stateData?.state || !Array.isArray(stateData.state.users)){
+            throw new Error("Общая база пользователей не настроена. Обновите Apps Script до версии v24.");
+          }
+          db=stateData.state;
+        }
+        const matchedUser =
+          (data.user && data.user.id ? data.user : null) ||
+          (db.users||[]).find(u=>String(u.login||"").trim().toLowerCase()===login.trim().toLowerCase());
+
+        if(!matchedUser || !matchedUser.id) throw new Error("Пользователь найден, но у него отсутствует ID");
+        session={token:data.token,userId:matchedUser.id};
         localStorage.setItem(sessionKey,JSON.stringify(session));
-        db=data.state;
         localStorage.setItem(CACHE_KEY,JSON.stringify(db));
         render();
       }catch(ex){
@@ -286,7 +300,7 @@
   }
 
   function adminManagers(){
-    const me=db.users.find(u=>u.id===session.userId);
+    const users=Array.isArray(db?.users)?db.users:[]; const me=users.find(u=>u.id===session.userId)||users.find(u=>u.role==="admin")||users[0];
     const managers=db.users.filter(u=>u.role==="manager");
     shell(`${nav("managers",me)}
       <div class="section-head"><div><h1>Менеджеры</h1><p class="muted">Нажмите на менеджера, чтобы увидеть его проектов</p></div></div>
@@ -308,7 +322,7 @@
   }
 
   function adminAllClients(){
-    const me=db.users.find(u=>u.id===session.userId);
+    const users=Array.isArray(db?.users)?db.users:[]; const me=users.find(u=>u.id===session.userId)||users.find(u=>u.role==="admin")||users[0];
     shell(`${nav("allclients",me)}
       <div class="section-head"><div><h1>Все проекты</h1><p class="muted">${db.clients.filter(c=>!c.deleted).length} записей</p></div></div>
       <div class="toolbar"><input id="q" placeholder="Поиск"><select id="mgrFilter"><option value="">Все менеджеры</option>${db.users.filter(u=>u.role==="manager").map(u=>`<option value="${u.id}">${esc(u.name)}</option>`).join("")}</select></div>
@@ -321,7 +335,7 @@
 
 
   function trashView(){
-    const me=db.users.find(u=>u.id===session.userId);
+    const users=Array.isArray(db?.users)?db.users:[]; const me=users.find(u=>u.id===session.userId)||users.find(u=>u.role==="admin")||users[0];
     const deleted=db.clients.filter(c=>c.deleted && (me.role==="admin"||me.role==="viewer"||c.managerId===me.id));
     shell(`${nav("trash",me)}
       <div class="section-head"><div><h1>Корзина</h1><p class="muted">Удалённые проекты доступны только для просмотра</p></div></div>
@@ -331,11 +345,11 @@
   }
 
   function usersView(){
-    const me=db.users.find(u=>u.id===session.userId);
+    const users=Array.isArray(db?.users)?db.users:[]; const me=users.find(u=>u.id===session.userId)||users.find(u=>u.role==="admin")||users[0];
     shell(`${nav("users",me)}
-      <div class="section-head"><div><h1>Пользователи</h1><p class="muted">Регистрация отключена — аккаунты создаёт администратор</p></div><button id="addUser" class="btn primary">+ Добавить пользователя</button></div>
-      <div class="table-wrap card"><table class="table"><thead><tr><th>Имя</th><th>Логин</th><th>Роль</th><th>Статус</th><th></th></tr></thead><tbody>
-      ${db.users.map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.login)}</td><td>${roleName(u.role)}</td><td>${u.active?'<span class="pill green">Активен</span>':'<span class="pill gray">Заблокирован</span>'}</td><td><button class="btn" data-edit-user="${u.id}">Редактировать</button></td></tr>`).join("")}
+      <div class="section-head"><div><h1>Пользователи</h1><p class="muted">Регистрация отключена — аккаунты создаёт администратор. Данные синхронизируются с листом «Пользователи» в Google Таблице.</p></div><button id="addUser" class="btn primary">+ Добавить пользователя</button></div>
+      <div class="table-wrap card"><table class="table"><thead><tr><th>Имя</th><th>Логин</th><th>Роль</th><th>Доступ</th><th>ID</th><th></th></tr></thead><tbody>
+      ${(db.users||[]).map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.login)}</td><td>${roleName(u.role)}</td><td>${u.active!==false?'<span class="pill green">Разрешён</span>':'<span class="pill gray">Запрещён</span>'}</td><td><span class="small muted">${esc(u.id||"—")}</span></td><td><button class="btn" data-edit-user="${u.id}">Редактировать</button></td></tr>`).join("")}
       </tbody></table></div>`);
     wireNav();
     document.getElementById("addUser").onclick=()=>openUserEditor(null);
@@ -424,7 +438,7 @@
 
   function openDialogExport(id){
     const c=db.clients.find(x=>x.id===id);
-    const me=db.users.find(u=>u.id===session.userId);
+    const users=Array.isArray(db?.users)?db.users:[]; const me=users.find(u=>u.id===session.userId)||users.find(u=>u.role==="admin")||users[0];
     if(!c || !me) return;
     if(me.role!=="admin" && me.role!=="viewer"){ alert("Нет доступа"); return; }
 
@@ -724,7 +738,7 @@
   let currentRoute=null;
   function route(r){
     currentRoute=r;
-    const me=db.users.find(u=>u.id===session.userId);
+    const users=Array.isArray(db?.users)?db.users:[]; const me=users.find(u=>u.id===session.userId)||users.find(u=>u.role==="admin")||users[0];
     if(!me)return loginView();
     if(r==="trash") return trashView();
     if(me.role==="admin" || me.role==="viewer"){
@@ -737,7 +751,7 @@
   }
   function render(){
     if(!session)return loginView();
-    const me=db.users.find(u=>u.id===session.userId);
+    const users=Array.isArray(db?.users)?db.users:[]; const me=users.find(u=>u.id===session.userId)||users.find(u=>u.role==="admin")||users[0];
     if(!me||!me.active){logout();return}
     route(currentRoute || ((me.role==="admin"||me.role==="viewer")?"dashboard":"clients"));
   }
